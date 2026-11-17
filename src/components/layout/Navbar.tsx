@@ -1,42 +1,66 @@
-
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactElement } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
+
 import logo from "../../../public/assets/images/logo.png";
 
 import { CartButton } from "@/components/cart/CartButton";
 import { UserMenu } from "@/components/layout/UserMenu";
 
-import { selectUser } from "@/store/selectors/authSelectors";
-import { logout } from "@/store/slices/authSlice/AuthSlice";
-import { clearCart } from "@/store/slices/cartSlice/CartSlice";
+import { useLogoutMutation } from "@/features/auth/api/authApi";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+
 import { capitalizeFirst } from "@/lib/utils/string/string";
-import Link from "next/link";
+import { baseApi } from "@/lib/api/baseApi";
 
+/**
+ * Main store navigation bar.
+ *
+ * @returns {JSX.Element} The application navbar.
+ */
 export function Navbar(): ReactElement {
-  const { name, image } = useSelector(selectUser);
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const router = useRouter();
-  const displayName = capitalizeFirst(name);
 
-const handleLogout = (): void => {
-  dispatch(clearCart());
-  dispatch(logout());
-  router.replace("/");
-};
+  const user = useAppSelector((state) => state.auth.user);
 
-   return (
+  const [logout] = useLogoutMutation();
+
+  const displayName = user
+    ? capitalizeFirst(`${user.firstName} ${user.lastName}`.trim())
+    : "";
+
+  /**
+   * Logs out the current user and clears cached API data.
+   *
+   * @returns {Promise<void>}
+   */
+  const handleLogout = async (): Promise<void> => {
+    try {
+      await logout().unwrap();
+    } catch {
+      // Local authentication is cleared by the logout mutation.
+    } finally {
+      dispatch(baseApi.util.resetApiState());
+      router.replace("/");
+    }
+  };
+
+  return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-[0_4px_20px_-12px_rgba(75,54,33,0.25)]">
       {/* Welcome Bar */}
       <div className="bg-[#4B3621] px-4 py-2 text-center text-xs text-[#F8F4ED] sm:text-sm">
         <p>
-          Welcome back,
-          <span className="ml-1 font-semibold text-[#D6B58A]">
-            {displayName}
-          </span>
+          {user ? "Welcome back," : "Welcome to our store"}
+
+          {user && (
+            <span className="ml-1 font-semibold text-[#D6B58A]">
+              {displayName}
+            </span>
+          )}
         </p>
       </div>
 
@@ -92,11 +116,20 @@ const handleLogout = (): void => {
 
             {/* User */}
             <div className="border-l border-[#E8D8C3] pl-3 sm:pl-5">
-              <UserMenu
-                displayName={displayName}
-                image={image}
-                onLogout={handleLogout}
-              />
+              {user ? (
+                <UserMenu
+                  displayName={displayName}
+                  image={user.avatar ?? ""}
+                  onLogout={handleLogout}
+                />
+              ) : (
+                <Link
+                  href="/login"
+                  className="text-sm font-semibold text-[#806B56] transition-colors hover:text-[#A87945]"
+                >
+                  Login
+                </Link>
+              )}
             </div>
           </div>
         </div>

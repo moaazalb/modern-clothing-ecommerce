@@ -1,10 +1,9 @@
-
 import type { Metadata } from "next";
 import { Inter, Geist } from "next/font/google";
 import type { ReactElement, ReactNode } from "react";
 
-import { ClientOnly } from "@/components/common/ClientOnly";
 import { StoreProvider } from "@/components/providers/StoreProvider";
+import { AuthInitializer } from "@/components/auth/AuthInitializer";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
@@ -41,11 +40,11 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
         <StoreProvider>
-          <ClientOnly>
-            <Navbar />
-            {children}
-            <Footer />
-          </ClientOnly>
+          <AuthInitializer>
+              <Navbar />
+              {children}
+              <Footer />
+          </AuthInitializer>
         </StoreProvider>
       </body>
     </html>

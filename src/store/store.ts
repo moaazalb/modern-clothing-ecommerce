@@ -1,28 +1,40 @@
-// store/store.ts
-import { configureStore } from '@reduxjs/toolkit';
-import authReducer from "./slices/authSlice/AuthSlice";
-import cartReducer from './slices/cartSlice/CartSlice';
-import productReducer from "./slices/productSlice/ProductSlice";
-import sliderReducer from "./slices/sliderSlice/SliderSlice";
+import { configureStore, createListenerMiddleware } from "@reduxjs/toolkit";
+
+import authReducer, { clearCredentials } from "@/features/auth/store/authSlice";
+import { baseApi } from "@/lib/api/baseApi";
 
 /**
- * Creates a new store. Next.js needs one store per request, so this is a function
- * and not a shared constant. The slice keys match what the selectors read.
+ * Creates a new Redux store instance.
  *
- * @returns {AppStore} A new store with the auth (`user`), cart, products and slider slices.
+ * A separate store instance is created for each application provider.
+ * When the credentials are cleared (logout or failed refresh), the whole API
+ * cache is reset so one user's data is never shown to the next user.
+ *
+ * @returns A configured Redux store.
  */
 export function makeStore() {
-  console.trace("makeStore called");
+  const listener = createListenerMiddleware();
+
+  listener.startListening({
+    actionCreator: clearCredentials,
+    effect: (_action, api) => {
+      api.dispatch(baseApi.util.resetApiState());
+    },
+  });
+
   return configureStore({
     reducer: {
-      user: authReducer,
-      cart: cartReducer,
-      products: productReducer,
-      slider: sliderReducer,
+      auth: authReducer,
+      [baseApi.reducerPath]: baseApi.reducer,
     },
+
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware().prepend(listener.middleware).concat(baseApi.middleware),
   });
 }
 
 export type AppStore = ReturnType<typeof makeStore>;
+
 export type RootState = ReturnType<AppStore["getState"]>;
+
 export type AppDispatch = AppStore["dispatch"];

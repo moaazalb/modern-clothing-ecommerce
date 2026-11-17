@@ -1,6 +1,7 @@
+import { SignupForm } from "@/components/signup/SignupForm";
+import { ReactElement } from "react";
 
-import type { ReactElement } from "react";
-import { SignupForm } from "@/components/auth/SignupForm";
+
 
 /**
  * Signup page.

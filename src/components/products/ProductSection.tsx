@@ -1,45 +1,38 @@
-// components/products/ProductSection.tsx
+import Link from "next/link";
 import type { ReactElement } from "react";
-import { ProductSectionItem } from "@/components/products/ProductSectionItem";
-import { storeData } from "@/lib/data/dummyData";
 
-const FEATURED_PRODUCTS_COUNT = 6;
-const SECTION_TITLE = "SUMMER T-Shirt SALE 30%";
+import { ProductCard } from "@/components/products/ProductCard";
+import { getProducts } from "@/features/product/api/product.server";
+
+const NEW_ARRIVALS_COUNT = 6;
 
 /**
- * Home page sale section: a banner and the first products of the catalog.
- * It has no state or events, so it stays a Server Component.
+ * Home page section with the newest products.
  *
- * @returns {JSX.Element} The sale section.
+ * @returns The section, or an empty state when there are no products.
  */
-export function ProductSection(): ReactElement {
-  const featuredProducts = storeData.slice(0, FEATURED_PRODUCTS_COUNT);
+export async function ProductSection(): Promise<ReactElement> {
+  const { items } = await getProducts({
+    page: 1,
+    limit: NEW_ARRIVALS_COUNT,
+    sort: "newest",
+  });
 
   return (
     <section
-      aria-labelledby="sale-title"
+      aria-labelledby="new-arrivals-title"
       className="w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12"
     >
       <div className="mx-auto w-full max-w-3xl rounded-lg border border-[#D6B58A] bg-[#4B3621] p-3 shadow-sm sm:p-4">
         <h2
-          id="sale-title"
-          className="
-            text-center
-            font-inter
-            text-base
-            font-bold
-            leading-relaxed
-            tracking-normal
-            text-[#F8F4ED]
-            sm:text-lg
-            md:text-xl
-          "
+          id="new-arrivals-title"
+          className="text-center font-inter text-base font-bold leading-relaxed tracking-normal text-[#F8F4ED] sm:text-lg md:text-xl"
         >
-          {SECTION_TITLE}
+          New Arrivals
         </h2>
       </div>
 
-      {featuredProducts.length === 0 ? (
+      {items.length === 0 ? (
         <p
           role="status"
           className="py-12 text-center font-inter text-base text-[#806B56] sm:text-lg"
@@ -47,28 +40,24 @@ export function ProductSection(): ReactElement {
           No products available
         </p>
       ) : (
-        <ul
-          className="
-            mx-auto
-            grid
-            max-w-7xl
-            grid-cols-1
-            justify-items-center
-            gap-6
-            py-8
-            sm:grid-cols-2
-            sm:gap-6
-            lg:grid-cols-3
-            lg:gap-8
-            xl:gap-10
-          "
-        >
-          {featuredProducts.map((product) => (
-            <li key={product.id} className="w-full min-w-0 max-w-sm">
-              <ProductSectionItem product={product} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mx-auto grid max-w-7xl grid-cols-1 justify-items-center gap-6 py-8 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 lg:gap-8 xl:gap-10">
+            {items.map((product) => (
+              <li key={product.id} className="w-full min-w-0 max-w-sm">
+                <ProductCard product={product} />
+              </li>
+            ))}
+          </ul>
+
+          <div className="text-center">
+            <Link
+              href="/products"
+              className="font-inter text-sm font-semibold text-[#A87945] underline-offset-4 hover:underline"
+            >
+              View all products
+            </Link>
+          </div>
+        </>
       )}
     </section>
   );

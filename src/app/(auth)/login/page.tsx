@@ -1,7 +1,7 @@
 // app/login/page.tsx
 import type { Metadata } from "next";
 import type { ReactElement } from "react";
-import { LoginForm } from "@/components/auth/LoginForm";
+import { LoginForm } from "@/components/login/LoginForm";
 
 export const metadata: Metadata = {
   title: "Sign In",

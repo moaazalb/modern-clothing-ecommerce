@@ -1,111 +1,182 @@
-// components/products/AddToCartForm.tsx
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
+import Link from "next/link";
+import { useState } from "react";
 import type { ReactElement } from "react";
-import { useForm } from "react-hook-form";
-import { useDispatch } from "react-redux";
-import { ProductOptionSelect } from "@/components/products/singleProduct/ProductOptionSelect";
+
 import { Button } from "@/components/ui/button";
-import { addToCart } from "@/store/slices/cartSlice/CartSlice";
-import type { Product } from "@/lib/validations/product.schema";
+import { useAddCartItemMutation } from "@/features/cart/api/cartApi";
 import {
-  createProductSelectionSchema,
-  type ProductSelectionValues,
-} from "@/lib/validations/productSelection.schema";
+  getProductColors,
+  getSizesForColor,
+} from "@/features/product/lib/variants";
+import type {
+  PublicProductDetail,
+  PublicProductVariant,
+} from "@/features/product/types/product.types";
+import {
+  getApiErrorMessage,
+  isUnauthorizedError,
+} from "@/lib/api/getApiErrorMessage";
 import { showSuccess } from "@/lib/utils/alerts/alerts";
 
 interface AddToCartFormProps {
-  product: Product;
+  product: PublicProductDetail;
+  colorId: string | null;
+  sizeId: string | null;
+  selectedVariant: PublicProductVariant | undefined;
+  onColorChange: (colorId: string) => void;
+  onSizeChange: (sizeId: string) => void;
 }
 
+const SELECT_CLASS =
+  "h-11 w-full rounded-lg border border-[#D6B58A] bg-white px-3 text-sm text-[#4B3621] outline-none focus:ring-2 focus:ring-[#A87945] disabled:cursor-not-allowed disabled:opacity-50";
+
 /**
- * Size and color pickers with the "Add to Cart" button. The first size and color are
- * selected by default. Products without sizes (bags) get a disabled, empty size select.
+ * Color and size selectors with the add-to-cart button.
+ * The selection is owned by the parent so the gallery can follow the color.
  *
  * @param {AddToCartFormProps} props - Component props.
- * @param {Product} props.product - The product being shown.
  * @returns {JSX.Element} The form.
  */
-export function AddToCartForm({ product }: AddToCartFormProps): ReactElement {
-  const dispatch = useDispatch();
-  const schema = useMemo(() => createProductSelectionSchema(product), [product]);
-  const sizes = product.size ?? [];
-  const hasSizes = sizes.length > 0;
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isValid, isSubmitting },
-  } = useForm<ProductSelectionValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { size: sizes[0] ?? "", color: product.color[0] ?? "" },
-    mode: "onChange",
-  });
+export function AddToCartForm({
+  product,
+  colorId,
+  sizeId,
+  selectedVariant,
+  onColorChange,
+  onSizeChange,
+}: AddToCartFormProps): ReactElement {
+  const [addCartItem, { isLoading }] = useAddCartItemMutation();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [needsSignIn, setNeedsSignIn] = useState<boolean>(false);
+
+  const colors = getProductColors(product);
+  const sizes = colorId ? getSizesForColor(product, colorId) : [];
+  const hasSizes = product.sizeType !== null;
+  const canAdd = Boolean(selectedVariant?.inStock) && !isLoading;
+
+  let buttonLabel = "Add to Cart";
+
+  if (isLoading) {
+    buttonLabel = "Adding...";
+  } else if (!selectedVariant) {
+    buttonLabel = "Unavailable";
+  } else if (!selectedVariant.inStock) {
+    buttonLabel = "Out of Stock";
+  }
 
   /**
-   * Adds one unit of the product, with the chosen size and color, to the cart.
+   * Adds the selected variant to the authenticated user's cart.
    *
-   * @param {ProductSelectionValues} values - The validated selection.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
- const onSubmit = (values: ProductSelectionValues): void => {
-  dispatch(
-    addToCart({
-      id: product.id,
-      name: product.name,
-      img: product.img,
-      text: product.text,
-      price: product.price,
-      color: values.color,
-      ...(hasSizes ? { size: values.size } : {}),
-    })
-  );
+  const handleSubmit = async (): Promise<void> => {
+    if (!selectedVariant || !canAdd) {
+      return;
+    }
 
-  showSuccess(
-    "Added to Cart!",
-    `${product.name} has been added to your cart.`
-  );
-};
+    setErrorMessage(null);
+    setNeedsSignIn(false);
+
+    try {
+      await addCartItem({
+        variantId: selectedVariant.id,
+        quantity: 1,
+      }).unwrap();
+
+      showSuccess(
+        "Added to Cart!",
+        `${product.name} has been added to your cart.`,
+      );
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        setNeedsSignIn(true);
+        return;
+      }
+
+      setErrorMessage(getApiErrorMessage(error));
+    }
+  };
 
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      noValidate
-      className="flex w-full flex-col gap-5"
-    >
+    <div className="flex w-full flex-col gap-5">
       <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
         <div className="w-full min-w-0 flex-1">
-          <ProductOptionSelect
-            id="size"
-            label="Pick a size"
-            options={sizes}
-            registration={hasSizes ? register("size") : undefined}
-            isDisabled={!hasSizes}
-            error={errors.size?.message}
-          />
+          <label
+            htmlFor="product-color"
+            className="mb-2 block text-sm font-medium text-[#4B3621]"
+          >
+            Pick a color
+          </label>
+
+          <select
+            id="product-color"
+            value={colorId ?? ""}
+            onChange={(event) => onColorChange(event.target.value)}
+            disabled={colors.length === 0 || isLoading}
+            className={SELECT_CLASS}
+          >
+            {colors.map((color) => (
+              <option key={color.id} value={color.id}>
+                {color.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="w-full min-w-0 flex-1">
-          <ProductOptionSelect
-            id="color"
-            label="Pick a color"
-            options={product.color}
-            registration={register("color")}
-            error={errors.color?.message}
-          />
-        </div>
+        {hasSizes && (
+          <div className="w-full min-w-0 flex-1">
+            <label
+              htmlFor="product-size"
+              className="mb-2 block text-sm font-medium text-[#4B3621]"
+            >
+              Pick a size
+            </label>
+
+            <select
+              id="product-size"
+              value={sizeId ?? ""}
+              onChange={(event) => onSizeChange(event.target.value)}
+              disabled={sizes.length === 0 || isLoading}
+              className={SELECT_CLASS}
+            >
+              {sizes.map(({ size, inStock }) => (
+                <option key={size.id} value={size.id}>
+                  {inStock ? size.name : `${size.name} (Out of stock)`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <Button
-        type="submit"
+        type="button"
         variant="outline"
         size="lg"
-        disabled={!isValid || isSubmitting}
+        onClick={handleSubmit}
+        disabled={!canAdd}
         className="w-full border-[#A87945] bg-[#A87945] px-8 font-semibold text-white shadow-sm transition-all duration-300 hover:border-[#4B3621] hover:bg-[#4B3621] hover:text-white focus-visible:ring-2 focus-visible:ring-[#A87945] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-[#D6B58A] disabled:bg-[#E8D8C3] disabled:text-[#806B56] sm:w-auto"
       >
-        Add to Cart
+        {buttonLabel}
       </Button>
-    </form>
+
+      {needsSignIn && (
+        <p role="alert" className="text-sm text-[#4B3621]">
+          Please{" "}
+          <Link href="/login" className="font-semibold text-[#A87945] underline">
+            sign in
+          </Link>{" "}
+          to add items to your cart.
+        </p>
+      )}
+
+      {errorMessage && (
+        <p role="alert" className="text-sm text-red-700">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }

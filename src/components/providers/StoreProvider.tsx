@@ -1,36 +1,25 @@
 
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
-import { Provider } from "react-redux";
+import { useState } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-import { makeStore } from "@/store/store";
-import type { AppStore } from "@/store/store";
+import { Provider } from 'react-redux';
 
-import { StoreEffects } from "./StoreEffects";
+import { makeStore } from '@/store/store';
+import type { AppStore } from '@/store/store';
 
 interface StoreProviderProps {
   children: ReactNode;
 }
 
+/**
+ * Provides a single Redux store instance to the application.
+ */
 export function StoreProvider({
   children,
-}: StoreProviderProps): ReactElement | null {
-  const [store, setStore] = useState<AppStore | null>(null);
+}: StoreProviderProps): ReactElement {
+  const [store] = useState<AppStore>(() => makeStore());
 
-  useEffect(() => {
-    setStore(makeStore());
-  }, []);
-
-  if (!store) {
-    return null;
-  }
-
-  return (
-    <Provider store={store}>
-      <StoreEffects store={store} />
-      {children}
-    </Provider>
-  );
+  return <Provider store={store}>{children}</Provider>;
 }

@@ -14,13 +14,9 @@ const COPYRIGHT_OWNER = "Moaaz Al-bari";
  * @returns {JSX.Element} The footer.
  */
 export function Footer(): ReactElement {
-  const [year, setYear] = useState<number | null>(null);
+  const year = new Date().getFullYear();
 
-  useEffect(() => {
-    setYear(new Date().getFullYear());
-  }, []);
-
- return (
+  return (
     <footer className="mt-16 border-t border-[#E8D8C3] bg-[#F8F4ED]">
       <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-6 px-6 py-8 sm:flex-row sm:gap-4">
         {/* Logo */}

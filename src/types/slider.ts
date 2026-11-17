@@ -1,10 +1,11 @@
-// types/slider.ts
-export interface SliderState {
-  value: number;
-  length: number;
-}
+import type { StaticImageData } from "next/image";
 
-/** The part of the root state that the slider selectors need. */
-export interface SliderRootState {
-  slider: SliderState;
+/**
+ * A slide of the home page hero slider.
+ */
+export interface HeroSlide {
+  id: number;
+  img: StaticImageData;
+  alt: string;
+  text: string;
 }

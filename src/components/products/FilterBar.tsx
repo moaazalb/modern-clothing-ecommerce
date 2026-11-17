@@ -1,134 +1,262 @@
-// components/products/FilterBar.tsx
 "use client";
 
-import type { ReactElement } from "react";
-import { useDispatch } from "react-redux";
-import { FilterButton } from "@/components/products/FilterButton";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTransition } from "react";
+import type { FormEvent, ReactElement } from "react";
+
+import { FILTER_BUTTON_CLASS } from "@/components/products/FilterButton";
 import { FilterMenu } from "@/components/products/FilterMenu";
-import {
-  COLOR_OPTIONS,
-  GENDER_OPTIONS,
-  SIZE_OPTIONS,
-  TYPES_WITHOUT_SIZE_FILTER,
-} from "@/lib/constants/productFilters";
-import {
-  filterByColor,
-  filterBySize,
-  filterGender,
-  filterProducts,
-  sortByPrice,
-} from "@/store/slices/productSlice/ProductSlice";
-import type { ProductType } from "@/lib/validations/product.schema";
+import type { FilterOption } from "@/components/products/FilterMenu";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import type {
+  PublicColor,
+  PublicSize,
+} from "@/features/catalog/types/catalog.types";
 
 interface FilterBarProps {
-  type: ProductType;
+  colors: PublicColor[];
+  sizes: PublicSize[];
+}
+
+const FILTER_KEYS = [
+  "gender",
+  "sort",
+  "colorId",
+  "sizeId",
+  "inStock",
+  "minPrice",
+  "maxPrice",
+  "q",
+] as const;
+
+const GENDER_OPTIONS: readonly FilterOption[] = [
+  { label: "All genders", value: "" },
+  { label: "Men", value: "MEN" },
+  { label: "Women", value: "WOMEN" },
+  { label: "Unisex", value: "UNISEX" },
+];
+
+const SORT_OPTIONS: readonly FilterOption[] = [
+  { label: "Newest", value: "" },
+  { label: "Price: low to high", value: "price_asc" },
+  { label: "Price: high to low", value: "price_desc" },
+];
+
+/**
+ * Builds a menu label that shows the current selection.
+ *
+ * @param base - Label when nothing is selected.
+ * @param options - The menu options.
+ * @param value - The selected value.
+ * @returns The label.
+ */
+function buildLabel(
+  base: string,
+  options: readonly FilterOption[],
+  value: string,
+): string {
+  const selected = value
+    ? options.find((option) => option.value === value)
+    : undefined;
+
+  return selected ? `${base}: ${selected.label}` : base;
 }
 
 /**
- * The filter controls: gender, price sort, color, size and "Clear Filter".
- * The size menu is disabled for types that have no S/M/L/XL sizes.
+ * Filter controls. Every change updates the URL (and resets the page), so
+ * the server renders the new result and the link can be shared.
  *
- * @param {FilterBarProps} props - Component props.
- * @param {ProductType} props.type - The product type shown on the page.
- * @returns {JSX.Element} The filter bar.
+ * @param props - Component props.
+ * @param props.colors - Active colors for the color menu.
+ * @param props.sizes - Active sizes for the size menu.
+ * @returns The filter bar.
  */
-export function FilterBar({ type }: FilterBarProps): ReactElement {
-  const dispatch = useDispatch();
-  const isSizeDisabled = TYPES_WITHOUT_SIZE_FILTER.includes(type);
+export function FilterBar({ colors, sizes }: FilterBarProps): ReactElement {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  const colorOptions: FilterOption[] = [
+    { label: "All colors", value: "" },
+    ...colors.map((color) => ({
+      label: color.name,
+      value: color.id,
+      color: color.hexCode,
+    })),
+  ];
+
+  const sizeOptions: FilterOption[] = [
+    { label: "All sizes", value: "" },
+    ...sizes.map((size) => ({ label: size.name, value: size.id })),
+  ];
+
+  const hasActiveFilters = FILTER_KEYS.some((key) => searchParams.has(key));
+  const isInStockOnly = searchParams.get("inStock") === "true";
 
   /**
-   * Narrows the list by gender.
+   * Updates query parameters (an empty value removes the parameter).
    *
-   * @param {string} gender - The chosen gender.
+   * @param changes - Parameters to set or remove.
    * @returns {void}
    */
-  const handleGender = (gender: string): void => {
-    dispatch(filterGender(gender));
+  const updateParams = (changes: Record<string, string>): void => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    }
+
+    params.delete("page");
+
+    const query = params.toString();
+
+    startTransition(() => {
+      router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    });
   };
 
   /**
-   * Sorts the list by price, highest first.
+   * Applies the search text and the price range.
    *
+   * @param {FormEvent<HTMLFormElement>} event - Form submit event.
    * @returns {void}
    */
-  const handleSortByPrice = (): void => {
-    dispatch(sortByPrice());
+  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    updateParams({
+      q: String(formData.get("q") ?? "").trim(),
+      minPrice: String(formData.get("minPrice") ?? "").trim(),
+      maxPrice: String(formData.get("maxPrice") ?? "").trim(),
+    });
   };
 
   /**
-   * Narrows the list by color.
-   *
-   * @param {string} color - The chosen color.
-   * @returns {void}
-   */
-  const handleColor = (color: string): void => {
-    dispatch(filterByColor(color));
-  };
-
-  /**
-   * Narrows the list by size.
-   *
-   * @param {string} size - The chosen size.
-   * @returns {void}
-   */
-  const handleSize = (size: string): void => {
-    dispatch(filterBySize(size));
-  };
-
-  /**
-   * Resets the list to every product of this type.
+   * Removes every filter.
    *
    * @returns {void}
    */
   const handleClear = (): void => {
-    dispatch(filterProducts(type));
+    startTransition(() => {
+      router.push(pathname, { scroll: false });
+    });
   };
+
+  const inputClass =
+    "h-11 border-[#D6B58A] bg-white text-sm text-[#4B3621] focus-visible:ring-[#A87945]";
 
   return (
     <div
-  role="group"
-  aria-label="Product filters"
-  className="
-    flex w-full flex-col gap-5
-    py-6
-    sm:py-8
-    lg:flex-row lg:items-center lg:justify-between
-  "
->
-  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-    {GENDER_OPTIONS.map((gender) => (
-      <FilterButton
-        key={gender}
-        onClick={() => handleGender(gender)}
+      aria-busy={isPending}
+      className={`flex flex-col gap-3 transition-opacity ${isPending ? "opacity-60" : ""}`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterMenu
+          label={buildLabel("Gender", GENDER_OPTIONS, searchParams.get("gender") ?? "")}
+          options={GENDER_OPTIONS}
+          onSelect={(value) => updateParams({ gender: value })}
+          isDisabled={isPending}
+        />
+
+        <FilterMenu
+          label={buildLabel("Color", colorOptions, searchParams.get("colorId") ?? "")}
+          options={colorOptions}
+          onSelect={(value) => updateParams({ colorId: value })}
+          isDisabled={isPending}
+          isColorMenu
+        />
+
+        <FilterMenu
+          label={buildLabel("Size", sizeOptions, searchParams.get("sizeId") ?? "")}
+          options={sizeOptions}
+          onSelect={(value) => updateParams({ sizeId: value })}
+          isDisabled={isPending}
+        />
+
+        <FilterMenu
+          label={buildLabel("Sort", SORT_OPTIONS, searchParams.get("sort") ?? "")}
+          options={SORT_OPTIONS}
+          onSelect={(value) => updateParams({ sort: value })}
+          isDisabled={isPending}
+        />
+
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          aria-pressed={isInStockOnly}
+          disabled={isPending}
+          onClick={() => updateParams({ inStock: isInStockOnly ? "" : "true" })}
+          className={`${FILTER_BUTTON_CLASS} ${
+            isInStockOnly ? "border-[#A87945] bg-[#A87945] text-white" : ""
+          }`}
+        >
+          In stock only
+        </Button>
+
+        {hasActiveFilters && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="lg"
+            disabled={isPending}
+            onClick={handleClear}
+            className="text-[#806B56] hover:text-[#4B3621]"
+          >
+            Clear filters
+          </Button>
+        )}
+      </div>
+
+      <form
+        key={searchParams.toString()}
+        onSubmit={handleSubmit}
+        className="flex flex-wrap items-center gap-3"
       >
-        {gender}
-      </FilterButton>
-    ))}
+        <Input
+          name="q"
+          type="search"
+          aria-label="Search products"
+          placeholder="Search products"
+          maxLength={100}
+          defaultValue={searchParams.get("q") ?? ""}
+          className={`${inputClass} w-full sm:w-64`}
+        />
 
-    <FilterButton onClick={handleSortByPrice}>
-      High Price
-    </FilterButton>
+        <Input
+          name="minPrice"
+          inputMode="decimal"
+          aria-label="Minimum price"
+          placeholder="Min $"
+          pattern="\d{1,8}(\.\d{1,2})?"
+          title="Use a price such as 20 or 19.99"
+          defaultValue={searchParams.get("minPrice") ?? ""}
+          className={`${inputClass} w-28`}
+        />
 
-    <FilterMenu
-      label="Select a color"
-      options={COLOR_OPTIONS}
-      onSelect={handleColor}
-      isColorMenu
-    />
+        <Input
+          name="maxPrice"
+          inputMode="decimal"
+          aria-label="Maximum price"
+          placeholder="Max $"
+          pattern="\d{1,8}(\.\d{1,2})?"
+          title="Use a price such as 100 or 99.99"
+          defaultValue={searchParams.get("maxPrice") ?? ""}
+          className={`${inputClass} w-28`}
+        />
 
-    <FilterMenu
-      label="Select a size"
-      options={SIZE_OPTIONS}
-      onSelect={handleSize}
-      isDisabled={isSizeDisabled}
-    />
-  </div>
-
-  <div className="flex justify-end lg:shrink-0">
-    <FilterButton onClick={handleClear}>
-      Clear Filter
-    </FilterButton>
-  </div>
-</div>
+        <Button type="submit" size="lg" disabled={isPending} className="bg-[#4B3621] text-white hover:bg-[#A87945]">
+          Apply
+        </Button>
+      </form>
+    </div>
   );
 }
